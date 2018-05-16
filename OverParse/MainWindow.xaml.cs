@@ -21,13 +21,13 @@ namespace OverParse
     {
         private Log encounterlog;
         private List<Combatant> lastCombatants = new List<Combatant>();
+        public DispatcherTimer damageTimer = new DispatcherTimer();
         public static Dictionary<string, string> skillDict = new Dictionary<string, string>();
         public static string[] ignoreskill;
         private List<string> sessionLogFilenames = new List<string>();
         private string lastStatus = "";
         private IntPtr hwndcontainer;
         List<Combatant> workingList = new List<Combatant>();
-        public DispatcherTimer damageTimer = new DispatcherTimer();
         Process thisProcess = Process.GetCurrentProcess();
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -131,6 +131,7 @@ namespace OverParse
             LogToClipboard.IsChecked = Properties.Settings.Default.LogToClipboard;
             AlwaysOnTop.IsChecked = Properties.Settings.Default.AlwaysOnTop;
             AutoHideWindow.IsChecked = Properties.Settings.Default.AutoHideWindow;
+            QuestTime.IsChecked = Properties.Settings.Default.QuestTime;
 
             ShowDamageGraph.IsChecked = Properties.Settings.Default.ShowDamageGraph; ShowDamageGraph_Click(null, null);
             AnonymizeNames.IsChecked = Properties.Settings.Default.AnonymizeNames; AnonymizeNames_Click(null, null);
@@ -176,7 +177,7 @@ namespace OverParse
                 }
                 client.Dispose();
                 stream.Dispose();
-                }
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"skills.csv update failed: {ex.ToString()}");
@@ -192,11 +193,23 @@ namespace OverParse
                 }
             }
 
+            // ignoreskills.csv
+            try
+            {
+                WebClient client = new WebClient();
+                client.DownloadFile("https://raw.githubusercontent.com/mysterious64/OverParse/master/OverParse/Updates/ignoreskills.csv", "ignoreskills.csv");
+            }
+            catch
+            {
+                MessageBox.Show("Cannot update your local ignoreskills.csv please be warned that JA data might be wrong.\n\nA local copy will be used instead. If you'd like to try and update again, please use the 'Force Update Skills' option within the 'Other' menu.", "OverParse Setup", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
 
-
-            try {
+            try 
+            {
                 ignoreskill = File.ReadAllLines("ignoreskills.csv");
-            } catch (Exception e) {
+            } 
+            catch (Exception e) 
+            {
                 MessageBox.Show(e.ToString());
                 ignoreskill = new string[] { "12345678900" }; // Placeholder Value
             }
@@ -231,7 +244,7 @@ namespace OverParse
             //Initializing logCheckTimer
             System.Windows.Threading.DispatcherTimer logCheckTimer = new System.Windows.Threading.DispatcherTimer();
             logCheckTimer.Tick += new EventHandler(CheckForNewLog);
-            logCheckTimer.Interval = new TimeSpan(0, 0, 10);
+            logCheckTimer.Interval = new TimeSpan(0, 0, 1);
             logCheckTimer.Start();
         }
 
@@ -290,10 +303,10 @@ namespace OverParse
             {
                 if (Properties.Settings.Default.ListPct) { PercentHC.Width = new GridLength(39); } else { CombatantView.Columns.Remove(PercentColumn); PercentHC.Width = temp; }
                 if (Properties.Settings.Default.ListDmg) { DmgHC.Width = new GridLength(78); } else { CombatantView.Columns.Remove(DamageColumn); DmgHC.Width = temp; }
-                if (Properties.Settings.Default.ListDmgd) { DmgDHC.Width = new GridLength(56); } else { CombatantView.Columns.Remove(DamagedColumn); DmgDHC.Width = temp; }
-                if (Properties.Settings.Default.ListDPS) { DPSHC.Width = new GridLength(56); } else { CombatantView.Columns.Remove(DPSColumn); DPSHC.Width = temp; }
-                if (Properties.Settings.Default.ListJA) { JAHC.Width = new GridLength(39); } else { CombatantView.Columns.Remove(JAColumn); JAHC.Width = temp; }
-                if (Properties.Settings.Default.ListCri) { CriHC.Width = new GridLength(39); } else { CombatantView.Columns.Remove(CriColumn); CriHC.Width = temp; }
+                if (Properties.Settings.Default.ListDmgd) { DmgDHC.Width = new GridLength(52); } else { CombatantView.Columns.Remove(DamagedColumn); DmgDHC.Width = temp; }
+                if (Properties.Settings.Default.ListDPS) { DPSHC.Width = new GridLength(44); } else { CombatantView.Columns.Remove(DPSColumn); DPSHC.Width = temp; }
+                if (Properties.Settings.Default.ListJA) { JAHC.Width = new GridLength(44); } else { CombatantView.Columns.Remove(JAColumn); JAHC.Width = temp; }
+                if (Properties.Settings.Default.ListCri) { CriHC.Width = new GridLength(44); } else { CombatantView.Columns.Remove(CriColumn); CriHC.Width = temp; }
                 if (Properties.Settings.Default.ListHit) { MdmgHC.Width = new GridLength(62); } else { CombatantView.Columns.Remove(HColumn); MdmgHC.Width = temp; }
             }
             if (!Properties.Settings.Default.ListAtk) { CombatantView.Columns.Remove(MaxHitColumn); AtkHC.Width = temp; }
@@ -423,7 +436,17 @@ namespace OverParse
             // get a copy of the right combatants
             List<Combatant> targetList = (encounterlog.running ? encounterlog.combatants : lastCombatants);
             workingList.Clear();
-            foreach (Combatant c in targetList) { workingList.Add(c); }
+            foreach (Combatant c in targetList) 
+            { 
+                Combatant temp = new Combatant(c.ID, c.Name, c.isTemporary);
+                foreach (Attack a in c.Attacks)
+                {
+                    temp.Attacks.Add(new Attack(a.ID, a.Damage, a.JA, a.Cri)); 
+                }
+                temp.Damaged = c.Damaged;
+                temp.PercentReadDPS = c.PercentReadDPS;
+                workingList.Add(temp);
+            }
 
             // clear out the list
             CombatantData.Items.Clear();
@@ -443,8 +466,9 @@ namespace OverParse
                     if (c.AisDamage > 0)
                     {
                         Combatant AISHolder = new Combatant(c.ID, "AIS|" + c.Name, "AIS");
-                        c.Attacks = c.Attacks.Except(c.AisAttacks).ToList();
-                        AISHolder.Attacks.AddRange(c.AisAttacks);
+                        List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.AISAttackIDs.Contains(a.ID)).ToList();
+                        c.Attacks = c.Attacks.Except(targetAttacks).ToList();
+                        AISHolder.Attacks.AddRange(targetAttacks);
                         pendingCombatants.Add(AISHolder);
                     }
                 }
@@ -462,8 +486,9 @@ namespace OverParse
                     if (c.DBDamage > 0)
                     {
                         Combatant DBHolder = new Combatant(c.ID, "DB|" + c.Name, "DB");
-                        c.Attacks = c.Attacks.Except(c.DBAttacks).ToList();
-                        DBHolder.Attacks.AddRange(c.DBAttacks);
+                        List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.DBAttackIDs.Contains(a.ID)).ToList();
+                        c.Attacks = c.Attacks.Except(targetAttacks).ToList();
+                        DBHolder.Attacks.AddRange(targetAttacks);
                         pendingDBCombatants.Add(DBHolder);
                     }
                 }
@@ -481,8 +506,9 @@ namespace OverParse
                     if (c.RideDamage > 0)
                     {
                         Combatant RideHolder = new Combatant(c.ID, "Ride|" + c.Name, "Ride");
-                        c.Attacks = c.Attacks.Except(c.RideAttacks).ToList();
-                        RideHolder.Attacks.AddRange(c.RideAttacks);
+                        List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.RideAttackIDs.Contains(a.ID)).ToList();
+                        c.Attacks = c.Attacks.Except(targetAttacks).ToList();
+                        RideHolder.Attacks.AddRange(targetAttacks);
                         pendingRideCombatants.Add(RideHolder);
                     }
                 }
@@ -500,8 +526,9 @@ namespace OverParse
                     if (c.PwpDamage > 0)
                     {
                         Combatant PhotonHolder = new Combatant(c.ID, "Pwp|" + c.Name, "Pwp");
-                        c.Attacks = c.Attacks.Except(c.PwpAttacks).ToList();
-                        PhotonHolder.Attacks.AddRange(c.PwpAttacks);
+                        List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.PhotonAttackIDs.Contains(a.ID)).ToList();
+                        c.Attacks = c.Attacks.Except(targetAttacks).ToList();
+                        PhotonHolder.Attacks.AddRange(targetAttacks);
                         pendingPwpCombatants.Add(PhotonHolder);
                     }
                 }
@@ -519,8 +546,9 @@ namespace OverParse
                     if (c.LswDamage > 0)
                     {
                         Combatant LswHolder = new Combatant(c.ID, "Lsw|" + c.Name, "Lsw");
-                        c.Attacks = c.Attacks.Except(c.LswAttacks).ToList();
-                        LswHolder.Attacks.AddRange(c.LswAttacks);
+                        List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.LaconiumAttackIDs.Contains(a.ID)).ToList();
+                        c.Attacks = c.Attacks.Except(targetAttacks).ToList();
+                        LswHolder.Attacks.AddRange(targetAttacks);
                         pendingLswCombatants.Add(LswHolder);
                     }
                 }
@@ -531,8 +559,8 @@ namespace OverParse
             workingList.Sort((x, y) => y.ReadDamage.CompareTo(x.ReadDamage));
 
             // make dummy zanverse combatant if necessary
-            int totalZanverse = workingList.Sum(x => x.ZvsDamage);
-            int totalFinish = workingList.Sum(x => x.HTFDamage);
+            int totalZanverse = workingList.Where(c => c.IsAlly == true).Sum(x => x.ZvsDamage);
+            int totalFinish = workingList.Where(c => c.IsAlly == true).Sum(x => x.HTFDamage);
 
             if (Properties.Settings.Default.SeparateFinish)
             {
@@ -543,8 +571,9 @@ namespace OverParse
                     {
                         if (c.IsAlly)
                         {
-                            finishHolder.Attacks.AddRange(c.HTFAttacks);
-                            c.Attacks = c.Attacks.Except(c.HTFAttacks).ToList();
+                            List<Attack> targetAttacks = c.Attacks.Where(a => Combatant.FinishAttackIDs.Contains(a.ID)).ToList();
+                            finishHolder.Attacks.AddRange(targetAttacks);
+                            c.Attacks = c.Attacks.Except(targetAttacks).ToList();
                         }
                     }
                     workingList.Add(finishHolder);
@@ -560,8 +589,9 @@ namespace OverParse
                     {
                         if (c.IsAlly)
                         {
-                            zanverseHolder.Attacks.AddRange(c.ZvsAttacks);
-                            c.Attacks = c.Attacks.Except(c.ZvsAttacks).ToList();
+                            List<Attack> targetAttacks = c.Attacks.Where(a => a.ID == "2106601422").ToList();
+                            zanverseHolder.Attacks.AddRange(targetAttacks);
+                            c.Attacks = c.Attacks.Except(targetAttacks).ToList();
                         }
                     }
                     workingList.Add(zanverseHolder);
@@ -569,14 +599,14 @@ namespace OverParse
             }
 
             // get group damage totals
-            int totalReadDamage = workingList.Sum(x => x.Damage);
+            int totalDamage = workingList.Sum(x => x.Damage);
+            int totalReadDamage = workingList.Sum(x => x.ReadDamage);
 
             // dps calcs!
             foreach (Combatant c in workingList)
             {
                 c.PercentReadDPS = c.ReadDamage / (float)totalReadDamage * 100;
             }
-
 
             // damage graph stuff
             Combatant.maxShare = 0;
@@ -618,7 +648,6 @@ namespace OverParse
  
             }
 
-
             // status pane updates
             EncounterIndicator.Fill = new SolidColorBrush(Color.FromArgb(192, 255, 128, 128));
             EncounterStatus.Content = encounterlog.LogStatus();
@@ -641,10 +670,10 @@ namespace OverParse
                 string timer = timespan.ToString(@"h\:mm\:ss");
                 EncounterStatus.Content = $"{timer}";
 
-                float totalDPS = totalReadDamage / (float)elapsed;
+                float totalDPS = totalDamage / (float)elapsed;
 
                 if (totalDPS > 0)
-                    EncounterStatus.Content += $" - Total : {totalReadDamage.ToString("N0")}" + $" - {totalDPS.ToString("N0")} DPS";
+                    EncounterStatus.Content += $" - Total : {totalDamage.ToString("N0")}" + $" - {totalDPS.ToString("N0")} DPS";
 
                 if (!Properties.Settings.Default.SeparateZanverse)
                     EncounterStatus.Content += $" - Zanverse : {totalZanverse.ToString("N0")}";
@@ -658,7 +687,7 @@ namespace OverParse
                 if (Properties.Settings.Default.AutoEndEncounters)
                 {
                     int unixTimestamp = (int)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
-                    if ((unixTimestamp - encounterlog.newTimestamp) >= Properties.Settings.Default.EncounterTimeout)
+                    if ((unixTimestamp - Log.newTimestamp) >= Properties.Settings.Default.EncounterTimeout)
                     {
                         //Automatically ending an encounter
                         EndEncounter_Click(null, null);

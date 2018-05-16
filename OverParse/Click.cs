@@ -23,7 +23,6 @@ namespace OverParse
             encounterlog.backupCombatants = encounterlog.combatants;
             Log.backupTime = Log.ActiveTime;
 
-
             List<Combatant> workingListCopy = new List<Combatant>();
             foreach (Combatant c in workingList)
             {
@@ -253,8 +252,9 @@ namespace OverParse
         private void ChangeInterval_Click(object sender, RoutedEventArgs e)
         {
             AlwaysOnTop.IsChecked = false;
-            Inputbox input = new Inputbox("OverParse", "Change .csv Read Interval... (ms)", Properties.Settings.Default.Updateinv.ToString()) { Owner = this };
+            Inputbox input = new Inputbox("OverParse", "Change damage reading interval... (ms)", Properties.Settings.Default.Updateinv.ToString()) { Owner = this };
             input.ShowDialog();
+            
             if (Int32.TryParse(input.ResultText, out int x))
             {
                 if (x > 49)
@@ -270,6 +270,20 @@ namespace OverParse
             }
 
             AlwaysOnTop.IsChecked = Properties.Settings.Default.AlwaysOnTop;
+        }
+
+        private void QuestTime_Click(object sender, RoutedEventArgs e)
+        {
+            Properties.Settings.Default.QuestTime = QuestTime.IsChecked;
+
+            if (Properties.Settings.Default.QuestTime)
+            {
+                Log.ActiveTime = Log.diffTime;
+            } 
+            else 
+            {
+                Log.ActiveTime = Log.backupTime;
+            }
         }
 
         private void DefaultWindowSize_Click(object sender, RoutedEventArgs e)
@@ -320,10 +334,10 @@ namespace OverParse
             {
                 if (selectColumn.Pct) { CombatantView.Columns.Add(PercentColumn); PercentHC.Width = new GridLength(39); } else { PercentHC.Width = temp; }
                 if (selectColumn.Dmg) { CombatantView.Columns.Add(DamageColumn); DmgHC.Width = new GridLength(78); } else { DmgHC.Width = temp; }
-                if (selectColumn.Dmgd) { CombatantView.Columns.Add(DamagedColumn); DmgDHC.Width = new GridLength(56); } else { DmgDHC.Width = temp; }
-                if (selectColumn.DPS) { CombatantView.Columns.Add(DPSColumn); DPSHC.Width = new GridLength(56); } else { DPSHC.Width = temp; }
-                if (selectColumn.JA) { CombatantView.Columns.Add(JAColumn); JAHC.Width = new GridLength(39); } else { JAHC.Width = temp; }
-                if (selectColumn.Cri) { CombatantView.Columns.Add(CriColumn); CriHC.Width = new GridLength(39); } else { CriHC.Width = temp; }
+                if (selectColumn.Dmgd) { CombatantView.Columns.Add(DamagedColumn); DmgDHC.Width = new GridLength(52); } else { DmgDHC.Width = temp; }
+                if (selectColumn.DPS) { CombatantView.Columns.Add(DPSColumn); DPSHC.Width = new GridLength(44); } else { DPSHC.Width = temp; }
+                if (selectColumn.JA) { CombatantView.Columns.Add(JAColumn); JAHC.Width = new GridLength(44); } else { JAHC.Width = temp; }
+                if (selectColumn.Cri) { CombatantView.Columns.Add(CriColumn); CriHC.Width = new GridLength(44); } else { CriHC.Width = temp; }
                 if (selectColumn.Hit) { CombatantView.Columns.Add(HColumn); MdmgHC.Width = new GridLength(62); } else { MdmgHC.Width = temp; }
             }
             if (selectColumn.Atk) { CombatantView.Columns.Add(MaxHitColumn); AtkHC.Width = new GridLength(1.7, GridUnitType.Star); } else { AtkHC.Width = temp; }
